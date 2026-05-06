@@ -254,7 +254,6 @@ C:/Users/ines-user/projects/PUBSUB_C/open62541/include/open62541/plugin/serverco
 C:/Users/ines-user/projects/PUBSUB_C/open62541/include/open62541/plugin/historydatabase.h
 C:/Users/ines-user/projects/PUBSUB_C/open62541/include/open62541/server_pubsub.h
 C:/Users/ines-user/projects/PUBSUB_C/open62541/plugins/include/open62541/plugin/log_stdout.h
-C:/Users/ines-user/projects/PUBSUB_C/open62541/plugins/include/open62541/plugin/securitypolicy_default.h
 C:/Program Files (x86)/Windows Kits/10/include/10.0.26100.0/ucrt/stdio.h
 C:/Program Files (x86)/Windows Kits/10/include/10.0.26100.0/ucrt/corecrt_wstdio.h
 C:/Program Files (x86)/Windows Kits/10/include/10.0.26100.0/ucrt/corecrt_stdio_config.h

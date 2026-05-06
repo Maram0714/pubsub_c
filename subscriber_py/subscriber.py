@@ -15,7 +15,7 @@ class PubSubCFG:
     PublisherID: ua.Variant = field(default_factory=lambda: ua.Variant(ua.UInt16(2234)))
     WriterId: ua.UInt16 = field(default_factory=lambda: ua.UInt16(100))
     DataSetWriterId: ua.UInt16 = field(default_factory=lambda: ua.UInt16(62541))
-    Url: str = "opc.udp://224.0.0.22:4840"
+    Url: str = "opc.udp://127.0.0.1:5000"
 
 
 CFG = PubSubCFG()

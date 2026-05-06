@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.10)
-project(pubsub_publisher C)
+project(pubsub_subscriber C)
 
 set(CMAKE_C_STANDARD 99)
 
@@ -15,9 +15,9 @@ include_directories(
     ${MBEDTLS_ROOT}/include
 )
 
-add_executable(publisher main.c)
+add_executable(subscriber main.c)
 
-target_link_libraries(publisher
+target_link_libraries(subscriber
     ${OPEN62541_ROOT}/build/bin/open62541.lib
     ${MBEDTLS_ROOT}/build/library/mbedtls.lib
     ${MBEDTLS_ROOT}/build/library/mbedx509.lib

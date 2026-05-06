@@ -1,0 +1,3 @@
+C:/Users/ines-user/projects/PUBSUB_C/subscriber_c/CMakeFiles/subscriber.dir
+C:/Users/ines-user/projects/PUBSUB_C/subscriber_c/CMakeFiles/edit_cache.dir
+C:/Users/ines-user/projects/PUBSUB_C/subscriber_c/CMakeFiles/rebuild_cache.dir
