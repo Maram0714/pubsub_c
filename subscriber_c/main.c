@@ -1,203 +1,262 @@
-/* OPC UA PubSub Subscriber - Heat Pump side
- * Receives power limit command {PLimit:4200.00} from DSO Publisher
- * Matches publisher configuration: PublisherId=2234, WriterGroupId=100, DataSetWriterId=62541
+/* This work is licensed under a Creative Commons CCZero 1.0 Universal License.
+ * See http://creativecommons.org/publicdomain/zero/1.0/ for more information.
+ *
+ * Copyright (c) 2021 Fraunhofer IOSB (Author: Jan Hermes)
  */
-#include <open62541/server_config_default.h>
+
 #include <open62541/plugin/log_stdout.h>
 #include <open62541/server.h>
 #include <open62541/server_pubsub.h>
+#include <open62541/server_config_default.h>
+#include <open62541/types_generated.h>
+
+#include <open62541/plugin/securitypolicy_default.h>
 
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
+
+#define UA_AES128CTR_SIGNING_KEY_LENGTH 32
+#define UA_AES128CTR_KEY_LENGTH 16
+#define UA_AES128CTR_KEYNONCE_LENGTH 4
+
+static UA_Byte signingKey[32] =
+{1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,
+ 17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32};
+
+static UA_Byte encryptingKey[16] =
+{1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16};
+
+static UA_Byte keyNonce[4] =
+{1,2,3,4};
 
 static UA_NodeId connectionIdentifier;
 static UA_NodeId readerGroupIdentifier;
 static UA_NodeId readerIdentifier;
+
 static UA_DataSetReaderConfig readerConfig;
 
-/* Target variable node where received value is stored */
-static UA_NodeId powerLimitTargetNode;
+static void fillTestDataSetMetaData(UA_DataSetMetaDataType *pMetaData);
 
-/* --------------------------------------------------
- * Add PubSub Connection
- * -------------------------------------------------- */
+/* Add new connection to the server */
 static void
 addPubSubConnection(UA_Server *server, UA_String *transportProfile,
                     UA_NetworkAddressUrlDataType *networkAddressUrl) {
+    /* Configuration creation for the connection */
     UA_PubSubConnectionConfig connectionConfig;
-    memset(&connectionConfig, 0, sizeof(UA_PubSubConnectionConfig));
-    connectionConfig.name = UA_STRING("HP Subscriber Connection");
+    memset (&connectionConfig, 0, sizeof(UA_PubSubConnectionConfig));
+    connectionConfig.name = UA_STRING("UDPMC Connection 1");
     connectionConfig.transportProfileUri = *transportProfile;
     UA_Variant_setScalar(&connectionConfig.address, networkAddressUrl,
                          &UA_TYPES[UA_TYPES_NETWORKADDRESSURLDATATYPE]);
     connectionConfig.publisherId.idType = UA_PUBLISHERIDTYPE_UINT32;
     connectionConfig.publisherId.id.uint32 = UA_UInt32_random();
-    UA_Server_addPubSubConnection(server, &connectionConfig, &connectionIdentifier);
+    UA_Server_addPubSubConnection (server, &connectionConfig, &connectionIdentifier);
 }
 
-/* --------------------------------------------------
- * Add Reader Group
- * -------------------------------------------------- */
-static void addReaderGroup(UA_Server *server) {
+/**
+ * **ReaderGroup**
+ *
+ * ReaderGroup is used to group a list of DataSetReaders. All ReaderGroups are
+ * created within a PubSubConnection and automatically deleted if the connection
+ * is removed. All network message related filters are only available in the DataSetReader. */
+static void
+addReaderGroup(UA_Server *server) {
+    UA_ServerConfig *config = UA_Server_getConfig(server);
+
+    /* Encryption settings */
     UA_ReaderGroupConfig readerGroupConfig;
-    memset(&readerGroupConfig, 0, sizeof(UA_ReaderGroupConfig));
-    readerGroupConfig.name = UA_STRING("HP ReaderGroup");
-    UA_Server_addReaderGroup(server, connectionIdentifier,
-                             &readerGroupConfig, &readerGroupIdentifier);
+    memset (&readerGroupConfig, 0, sizeof(UA_ReaderGroupConfig));
+    readerGroupConfig.name = UA_STRING("ReaderGroup1");
+    readerGroupConfig.securityMode = UA_MESSAGESECURITYMODE_SIGNANDENCRYPT;
+    readerGroupConfig.securityPolicy = &config->pubSubConfig.securityPolicies[0];
+    UA_Server_addReaderGroup(server, connectionIdentifier, &readerGroupConfig,
+                             &readerGroupIdentifier);
+
+    /* Add the encryption key informaton */
+    UA_ByteString sk = {UA_AES128CTR_SIGNING_KEY_LENGTH, signingKey};
+    UA_ByteString ek = {UA_AES128CTR_KEY_LENGTH, encryptingKey};
+    UA_ByteString kn = {UA_AES128CTR_KEYNONCE_LENGTH, keyNonce};
+    UA_Server_setReaderGroupEncryptionKeys(server, readerGroupIdentifier, 1, sk, ek, kn);
 }
 
-/* --------------------------------------------------
- * Fill DataSet MetaData - must match publisher fields exactly
- * -------------------------------------------------- */
-static void fillDataSetMetaData(UA_DataSetMetaDataType *pMetaData) {
-    UA_DataSetMetaDataType_init(pMetaData);
-    pMetaData->name = UA_STRING("DSO Power Commands");
-
-    /* One field: PowerLimit as String */
-    pMetaData->fieldsSize = 1;
-    pMetaData->fields = (UA_FieldMetaData *)UA_Array_new(
-        pMetaData->fieldsSize, &UA_TYPES[UA_TYPES_FIELDMETADATA]);
-
-    UA_FieldMetaData_init(&pMetaData->fields[0]);
-    UA_NodeId_copy(&UA_TYPES[UA_TYPES_STRING].typeId,
-                   &pMetaData->fields[0].dataType);
-    pMetaData->fields[0].builtInType = UA_NS0ID_STRING;
-    pMetaData->fields[0].name = UA_STRING("PowerLimit");
-    pMetaData->fields[0].valueRank = -1; /* scalar */
-}
-
-/* --------------------------------------------------
- * Add DataSet Reader
- * -------------------------------------------------- */
-static void addDataSetReader(UA_Server *server) {
-    memset(&readerConfig, 0, sizeof(UA_DataSetReaderConfig));
-    readerConfig.name = UA_STRING("HP DataSet Reader");
-
-    /* Must match publisher exactly */
+/**
+ * **DataSetReader**
+ *
+ * DataSetReader can receive NetworkMessages with the DataSetMessage
+ * of interest sent by the Publisher. DataSetReader provides
+ * the configuration necessary to receive and process DataSetMessages
+ * on the Subscriber side. DataSetReader must be linked with a
+ * SubscribedDataSet and be contained within a ReaderGroup. */
+static void
+addDataSetReader(UA_Server *server) {
+    memset (&readerConfig, 0, sizeof(UA_DataSetReaderConfig));
+    readerConfig.name = UA_STRING("DataSet Reader 1");
+    /* Parameters to filter which DataSetMessage has to be processed
+     * by the DataSetReader */
+    /* The following parameters are used to show that the data published by
+     * tutorial_pubsub_publish.c is being subscribed and is being updated in
+     * the information model */
+    UA_UInt16 publisherIdentifier = 2234;
     readerConfig.publisherId.idType = UA_PUBLISHERIDTYPE_UINT16;
-    readerConfig.publisherId.id.uint16 = 2234;   /* matches publisher */
-    readerConfig.writerGroupId   = 100;           /* matches publisher */
-    readerConfig.dataSetWriterId = 62541;         /* matches publisher */
+    readerConfig.publisherId.id.uint16 = publisherIdentifier;
+    readerConfig.writerGroupId    = 100;
+    readerConfig.dataSetWriterId  = 62541;
 
-    fillDataSetMetaData(&readerConfig.dataSetMetaData);
+    /* Setting up Meta data configuration in DataSetReader */
+    fillTestDataSetMetaData(&readerConfig.dataSetMetaData);
 
     UA_Server_addDataSetReader(server, readerGroupIdentifier,
                                &readerConfig, &readerIdentifier);
 }
 
-/* --------------------------------------------------
- * Add Subscribed Variables (Target Variables)
- * -------------------------------------------------- */
-static void addSubscribedVariables(UA_Server *server, UA_NodeId dataSetReaderId) {
-    /* Create folder node */
+/**
+ * **SubscribedDataSet**
+ *
+ * Set SubscribedDataSet type to TargetVariables data type.
+ * Add subscribedvariables to the DataSetReader */
+static void
+addSubscribedVariables (UA_Server *server, UA_NodeId dataSetReaderId) {
     UA_NodeId folderId;
+    UA_String folderName = readerConfig.dataSetMetaData.name;
     UA_ObjectAttributes oAttr = UA_ObjectAttributes_default;
-    oAttr.displayName = UA_LOCALIZEDTEXT("en-US", "HP Subscribed Variables");
-    UA_Server_addObjectNode(server, UA_NODEID_NULL,
-                            UA_NS0ID(OBJECTSFOLDER), UA_NS0ID(ORGANIZES),
-                            UA_QUALIFIEDNAME(1, "HP Subscribed Variables"),
+    UA_QualifiedName folderBrowseName;
+    if(folderName.length > 0) {
+        oAttr.displayName.locale = UA_STRING ("en-US");
+        oAttr.displayName.text = folderName;
+        folderBrowseName.namespaceIndex = 1;
+        folderBrowseName.name = folderName;
+    } else {
+        oAttr.displayName = UA_LOCALIZEDTEXT ("en-US", "Subscribed Variables");
+        folderBrowseName = UA_QUALIFIEDNAME (1, "Subscribed Variables");
+    }
+
+    UA_Server_addObjectNode(server, UA_NODEID_NULL, UA_NS0ID(OBJECTSFOLDER),
+                            UA_NS0ID(ORGANIZES), folderBrowseName,
                             UA_NS0ID(BASEOBJECTTYPE), oAttr, NULL, &folderId);
 
-    /* Create target variable for PowerLimit string */
-    UA_VariableAttributes vAttr = UA_VariableAttributes_default;
-    vAttr.displayName = UA_LOCALIZEDTEXT("en-US", "PowerLimit");
-    vAttr.dataType = UA_TYPES[UA_TYPES_STRING].typeId;
-    UA_String initVal = UA_STRING("");
-    UA_Variant_setScalar(&vAttr.value, &initVal, &UA_TYPES[UA_TYPES_STRING]);
+/**
+ * **TargetVariables**
+ *
+ * The SubscribedDataSet option TargetVariables defines a list of Variable mappings between
+ * received DataSet fields and target Variables in the Subscriber AddressSpace.
+ * The values subscribed from the Publisher are updated in the value field of these variables */
+    /* Create the TargetVariables with respect to DataSetMetaData fields */
+    UA_FieldTargetDataType *targetVars = (UA_FieldTargetDataType*)
+            UA_calloc(readerConfig.dataSetMetaData.fieldsSize, sizeof(UA_FieldTargetDataType));
+    for(size_t i = 0; i < readerConfig.dataSetMetaData.fieldsSize; i++) {
+        /* Variable to subscribe data */
+        UA_VariableAttributes vAttr = UA_VariableAttributes_default;
+        UA_LocalizedText_copy(&readerConfig.dataSetMetaData.fields[i].description,
+                              &vAttr.description);
+        vAttr.displayName.locale = UA_STRING("en-US");
+        vAttr.displayName.text = readerConfig.dataSetMetaData.fields[i].name;
+        vAttr.dataType = readerConfig.dataSetMetaData.fields[i].dataType;
+        UA_String emptyStr = UA_STRING("");
+        UA_Variant_setScalar(&vAttr.value, &emptyStr, &UA_TYPES[UA_TYPES_STRING]);
+        UA_NodeId newNode;
+        UA_Server_addVariableNode(server, UA_NODEID_NUMERIC(1, (UA_UInt32)i + 50000),
+                                  folderId, UA_NS0ID(HASCOMPONENT),
+                                  UA_QUALIFIEDNAME(1, (char *)readerConfig.dataSetMetaData.fields[i].name.data),
+                                  UA_NS0ID(BASEDATAVARIABLETYPE),
+                                  vAttr, NULL, &newNode);
+        targetVars[i].attributeId  = UA_ATTRIBUTEID_VALUE;
+        targetVars[i].targetNodeId = newNode;
+    }
 
-UA_NodeId newNode;
-UA_Server_addVariableNode(server,
-                          UA_NODEID_STRING(1, "power.limit.sub"),
-                          folderId,
-                          UA_NS0ID(HASCOMPONENT),
-                          UA_QUALIFIEDNAME(1, "PowerLimit"),
-                          UA_NS0ID(BASEDATAVARIABLETYPE),
-                          vAttr, NULL, &powerLimitTargetNode);
+    UA_Server_DataSetReader_createTargetVariables(server, dataSetReaderId,
+                                                  readerConfig.dataSetMetaData.fieldsSize,
+                                                  targetVars);
 
-    /* Link target variable to DataSetReader */
-    UA_FieldTargetDataType targetVar;
-    UA_FieldTargetDataType_init(&targetVar);
-    targetVar.attributeId  = UA_ATTRIBUTEID_VALUE;
-    targetVar.targetNodeId = powerLimitTargetNode;
-
-    UA_Server_DataSetReader_createTargetVariables(server, dataSetReaderId, 1, &targetVar);
+    UA_free(targetVars);
     UA_free(readerConfig.dataSetMetaData.fields);
 }
 
-/* --------------------------------------------------
- * Callback to print received value
- * -------------------------------------------------- */
-static void
-printReceivedValue(UA_Server *server, void *data) {
-    UA_Variant value;
-    UA_Variant_init(&value);
-    UA_Server_readValue(server, powerLimitTargetNode, &value);
+/**
+ * **DataSetMetaData**
+ *
+ * The DataSetMetaData describes the content of a DataSet. It provides the information necessary to decode
+ * DataSetMessages on the Subscriber side. DataSetMessages received from the Publisher are decoded into
+ * DataSet and each field is updated in the Subscriber based on datatype match of TargetVariable fields of Subscriber
+ * and PublishedDataSetFields of Publisher */
+static void fillTestDataSetMetaData(UA_DataSetMetaDataType *pMetaData) {
+    UA_DataSetMetaDataType_init(pMetaData);
+    pMetaData->name = UA_STRING("DataSet 1");
+    
+    pMetaData->fieldsSize = 1;  /* only one field */
+    pMetaData->fields = (UA_FieldMetaData*)UA_Array_new(
+        pMetaData->fieldsSize, &UA_TYPES[UA_TYPES_FIELDMETADATA]);
 
-    if(UA_Variant_hasScalarType(&value, &UA_TYPES[UA_TYPES_STRING])) {
-        UA_String *str = (UA_String *)value.data;
-        if(str->length > 0) {
-            printf("\n=======================================================\n");
-            printf("[HEAT PUMP] Command received from DSO!\n");
-            printf("  Raw command : %.*s\n", (int)str->length, str->data);
-            printf("=======================================================\n");
-        }
-    }
-    UA_Variant_clear(&value);
+    /* PowerLimit String field */
+    UA_FieldMetaData_init(&pMetaData->fields[0]);
+    UA_NodeId_copy(&UA_TYPES[UA_TYPES_STRING].typeId,
+                   &pMetaData->fields[0].dataType);
+    pMetaData->fields[0].builtInType = UA_NS0ID_STRING;
+    pMetaData->fields[0].name = UA_STRING("PowerLimit");
+    pMetaData->fields[0].valueRank = -1;
 }
 
-/* --------------------------------------------------
- * Main
- * -------------------------------------------------- */
-static int
-run(UA_String *transportProfile,
-    UA_NetworkAddressUrlDataType *networkAddressUrl) {
+/**
+ * Followed by the main server code, making use of the above definitions */
 
+static void
+run(UA_String *transportProfile, UA_NetworkAddressUrlDataType *networkAddressUrl) {
     UA_Server *server = UA_Server_new();
+    UA_ServerConfig *config = UA_Server_getConfig(server);
+
+    /* Instantiate the PubSub SecurityPolicy */
+    config->pubSubConfig.securityPolicies = (UA_PubSubSecurityPolicy*)
+        UA_malloc(sizeof(UA_PubSubSecurityPolicy));
+    config->pubSubConfig.securityPoliciesSize = 1;
+    UA_PubSubSecurityPolicy_Aes128Ctr(config->pubSubConfig.securityPolicies,
+                                      config->logging);
 
     addPubSubConnection(server, transportProfile, networkAddressUrl);
     addReaderGroup(server);
     addDataSetReader(server);
     addSubscribedVariables(server, readerIdentifier);
 
-    /* Add a repeated callback to print received value every 1 second */
-    UA_UInt64 callbackId;
-    UA_Server_addRepeatedCallback(server, printReceivedValue,
-                                  NULL, 1000, &callbackId);
-
     UA_Server_enableAllPubSubComponents(server);
-
-    printf("[HEAT PUMP] C Subscriber started\n");
-    printf("[HEAT PUMP] Waiting for DSO power limit command...\n");
-    printf("[HEAT PUMP] Listening on: ");
-    for(size_t i = 0; i < networkAddressUrl->url.length; i++)
-        printf("%c", networkAddressUrl->url.data[i]);
-    printf("\n");
-
     UA_Server_runUntilInterrupt(server);
+
     UA_Server_delete(server);
-    return EXIT_SUCCESS;
 }
 
-static void usage(char *progname) {
-    printf("usage: %s [uri]\n", progname);
-    printf("  default: opc.udp://224.0.0.22:4840/\n");
+static void
+usage(char *progname) {
+    printf("usage: %s <uri> [device]\n", progname);
 }
 
 int main(int argc, char **argv) {
     UA_String transportProfile =
         UA_STRING("http://opcfoundation.org/UA-Profile/Transport/pubsub-udp-uadp");
     UA_NetworkAddressUrlDataType networkAddressUrl =
-        {UA_STRING_NULL, UA_STRING("opc.udp://224.0.0.22:4840/")};
+        {UA_STRING_NULL , UA_STRING("opc.udp://0.0.0.0:4840/")};
 
-    if(argc > 1) {
-        if(strcmp(argv[1], "-h") == 0) {
+    if (argc > 1) {
+        if (strcmp(argv[1], "-h") == 0) {
             usage(argv[0]);
             return EXIT_SUCCESS;
-        } else if(strncmp(argv[1], "opc.udp://", 10) == 0) {
+        }
+
+        if (strncmp(argv[1], "opc.udp://", 10) == 0) {
             networkAddressUrl.url = UA_STRING(argv[1]);
+        } else if (strncmp(argv[1], "opc.eth://", 10) == 0) {
+            transportProfile =
+                UA_STRING("http://opcfoundation.org/UA-Profile/Transport/pubsub-eth-uadp");
+            if (argc < 3) {
+                printf("Error: UADP/ETH needs an interface name\n");
+                return EXIT_FAILURE;
+            }
+            networkAddressUrl.url = UA_STRING(argv[1]);
+        } else {
+            printf("Error: unknown URI\n");
+            return EXIT_FAILURE;
         }
     }
+    if (argc > 2) {
+        networkAddressUrl.networkInterface = UA_STRING(argv[2]);
+    }
 
-    return run(&transportProfile, &networkAddressUrl);
+    run(&transportProfile, &networkAddressUrl);
+    return 0;
 }

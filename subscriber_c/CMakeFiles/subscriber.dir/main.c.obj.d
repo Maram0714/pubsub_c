@@ -1,6 +1,5 @@
-C:/Users/ines-user/projects/PUBSUB_C/open62541/plugins/include/open62541/server_config_default.h
-C:/Users/ines-user/projects/PUBSUB_C/open62541/include/open62541/server.h
-C:/Users/ines-user/projects/PUBSUB_C/open62541/include/open62541/common.h
+C:/Users/ines-user/projects/PUBSUB_C/open62541/plugins/include/open62541/plugin/log_stdout.h
+C:/Users/ines-user/projects/PUBSUB_C/open62541/include/open62541/plugin/log.h
 C:/Users/ines-user/projects/PUBSUB_C/open62541/build/src_generated/open62541/config.h
 C:/Program Files (x86)/Windows Kits/10/include/10.0.26100.0/ucrt/stddef.h
 C:/Program Files (x86)/Windows Kits/10/include/10.0.26100.0/ucrt/corecrt.h
@@ -236,6 +235,8 @@ C:/Program Files (x86)/Windows Kits/10//include/10.0.26100.0//um/winsvc.h
 C:/Program Files (x86)/Windows Kits/10//include/10.0.26100.0//um/mcx.h
 C:/Program Files (x86)/Windows Kits/10//include/10.0.26100.0//um/imm.h
 C:/Program Files (x86)/Windows Kits/10//include/10.0.26100.0//um/ime_cmodes.h
+C:/Users/ines-user/projects/PUBSUB_C/open62541/include/open62541/server.h
+C:/Users/ines-user/projects/PUBSUB_C/open62541/include/open62541/common.h
 C:/Users/ines-user/projects/PUBSUB_C/open62541/build/src_generated/open62541/nodeids.h
 C:/Users/ines-user/projects/PUBSUB_C/open62541/include/open62541/util.h
 C:/Users/ines-user/projects/PUBSUB_C/open62541/include/open62541/types.h
@@ -243,7 +244,6 @@ C:/Users/ines-user/projects/PUBSUB_C/open62541/build/src_generated/open62541/sta
 C:/Users/ines-user/projects/PUBSUB_C/open62541/build/src_generated/open62541/types_generated.h
 C:/Users/ines-user/projects/PUBSUB_C/open62541/include/open62541/types.h
 C:/Users/ines-user/projects/PUBSUB_C/open62541/build/src_generated/open62541/types_generated.h
-C:/Users/ines-user/projects/PUBSUB_C/open62541/include/open62541/plugin/log.h
 C:/Users/ines-user/projects/PUBSUB_C/open62541/include/open62541/client.h
 C:/Users/ines-user/projects/PUBSUB_C/open62541/include/open62541/plugin/eventloop.h
 C:/Users/ines-user/projects/PUBSUB_C/open62541/build/src_generated/open62541/types_generated.h
@@ -253,7 +253,9 @@ C:/Users/ines-user/projects/PUBSUB_C/open62541/include/open62541/plugin/accessco
 C:/Users/ines-user/projects/PUBSUB_C/open62541/include/open62541/plugin/servercomponent.h
 C:/Users/ines-user/projects/PUBSUB_C/open62541/include/open62541/plugin/historydatabase.h
 C:/Users/ines-user/projects/PUBSUB_C/open62541/include/open62541/server_pubsub.h
-C:/Users/ines-user/projects/PUBSUB_C/open62541/plugins/include/open62541/plugin/log_stdout.h
+C:/Users/ines-user/projects/PUBSUB_C/open62541/plugins/include/open62541/server_config_default.h
+C:/Users/ines-user/projects/PUBSUB_C/open62541/build/src_generated/open62541/types_generated.h
+C:/Users/ines-user/projects/PUBSUB_C/open62541/plugins/include/open62541/plugin/securitypolicy_default.h
 C:/Program Files (x86)/Windows Kits/10/include/10.0.26100.0/ucrt/stdio.h
 C:/Program Files (x86)/Windows Kits/10/include/10.0.26100.0/ucrt/corecrt_wstdio.h
 C:/Program Files (x86)/Windows Kits/10/include/10.0.26100.0/ucrt/corecrt_stdio_config.h
