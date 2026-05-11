@@ -194,12 +194,29 @@ static void fillTestDataSetMetaData(UA_DataSetMetaDataType *pMetaData) {
     pMetaData->fields[0].name = UA_STRING("PowerLimit");
     pMetaData->fields[0].valueRank = -1;
 }
-
+/* Add repeated callback to print received value */
+static void printReceivedValue(UA_Server *server, void *data) {
+    UA_Variant value;
+    UA_Variant_init(&value);
+    UA_NodeId targetNode = UA_NODEID_NUMERIC(1, 50000);
+    UA_Server_readValue(server, targetNode, &value);
+    if(UA_Variant_hasScalarType(&value, &UA_TYPES[UA_TYPES_STRING])) {
+        UA_String *str = (UA_String *)value.data;
+        if(str->length > 0) {
+            printf("\n=======================================================\n");
+            printf("[HEAT PUMP] Command received from DSO! (ENCRYPTED)\n");
+            printf("  Raw command : %.*s\n", (int)str->length, str->data);
+            printf("=======================================================\n");
+        }
+    }
+    UA_Variant_clear(&value);
+}
 /**
  * Followed by the main server code, making use of the above definitions */
 
 static void
 run(UA_String *transportProfile, UA_NetworkAddressUrlDataType *networkAddressUrl) {
+    UA_UInt64 callbackId;
     UA_Server *server = UA_Server_new();
     UA_ServerConfig *config = UA_Server_getConfig(server);
 
@@ -214,7 +231,7 @@ run(UA_String *transportProfile, UA_NetworkAddressUrlDataType *networkAddressUrl
     addReaderGroup(server);
     addDataSetReader(server);
     addSubscribedVariables(server, readerIdentifier);
-
+    UA_Server_addRepeatedCallback(server, printReceivedValue, NULL, 1000, &callbackId);
     UA_Server_enableAllPubSubComponents(server);
     UA_Server_runUntilInterrupt(server);
 
